@@ -19,9 +19,28 @@ Go to the directory where has run-server.sh and run-client.sh files, then run fo
 ```shell 
 ./run-server.sh
 ```  
-This will run a server and listen at port 8080. To see your local server running, go to "localhost:8080" in your browser. 
+This will run a server and listen at port 8080. To see your local server running, go to "localhost:8080" in your browser.  
 
 ```shell 
-./run-client.sh
+./run-client.sh host:port /basedir blockSize
 ```
-This will run your client.
+This will run your client.  
+For example:  
+```shell
+./run-client.sh localhost:8080 ./ 1024  
+```
+it will return following stuff (with start code) 
+```shell
+Ping() successful
+PutBlock() successful
+GetBlock() successfully read in 16 bytes
+``` 
+And the server side will have following log print out:
+```shell
+Attempting to start XML-RPC Server...
+Started successfully.
+Accepting requests. (Halt program to stop.)
+Ping()
+PutBlock()
+GetBlock(h0)
+```
