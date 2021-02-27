@@ -12,7 +12,7 @@ And install instruction [here](https://ant.apache.org/manual/install.html).
 ```shell 
 ./build.sh
 ``` 
-this will automatically clean and recompile your code.   
+This will automatically clean and recompile your code.   
 
 2. run the server & client
 Go to the directory where has run-server.sh and run-client.sh files, then run following commands.  
