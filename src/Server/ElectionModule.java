@@ -24,6 +24,8 @@ public class ElectionModule implements Runnable {
     // VoteInfo
     private enum VoteInfo {VOTE_ME, VOTE_OTHERS}
     private VoteInfo[] voteInfos;
+    private int voteFor = -1;
+    private boolean voted = false;
 
 
     // Timeout upper/lower bound
@@ -129,6 +131,35 @@ public class ElectionModule implements Runnable {
                 server.getConsensusModule().startLeadership();
             }
         }
+    }
+
+    public boolean handleVoteReq(int candidateTerm, int candidateNodeID, int lastLogIndex, int lastLogTerm) {
+        if (candidateTerm < server.getTerm()) {
+            return false;
+        }
+        if (candidateTerm == server.getTerm()) {
+            if (!voted || voteFor == candidateNodeID) {
+                if (candidateLogUpToDate(lastLogIndex, lastLogTerm)) {
+                    voted = true;
+                    voteFor = candidateNodeID;
+                    return true;
+                }
+                return false;
+            }
+            return false;
+        }
+        if (candidateTerm > server.getTerm()) {
+            server.updateTerm(candidateTerm);
+            voted = true;
+            voteFor = candidateNodeID;
+            return true;
+        }
+        return false;
+    }
+
+    // TODO: Implement
+    private boolean candidateLogUpToDate(int lastLogIndex, int lastLogTerm) {
+        return true;
     }
 
     @Override

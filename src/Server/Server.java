@@ -165,6 +165,10 @@ public class Server {
 		term++;
 	}
 
+	public void updateTerm(int term) {
+		this.term = term;
+	}
+
 	public int getTotalNodes() {
 		return totalNodes;
 	}
