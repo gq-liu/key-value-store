@@ -37,7 +37,7 @@ GetBlock() successfully read in 16 bytes
 ``` 
 And the server side will have following log print out:
 ```shell
-Attempting to start XML-RPC Server...
+Attempting to start XML-RPC Server.Server...
 Started successfully.
 Accepting requests. (Halt program to stop.)
 Ping()

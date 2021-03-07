@@ -1,7 +1,29 @@
+package Server;
+
 import org.apache.xmlrpc.*;
 import java.util.*;
 
-public class Server { 
+public class Server {
+
+	private String[] serverList;
+
+
+	// server status
+	private  ServerStatus status = ServerStatus.FOLLOWER;
+
+	// server term
+	private int term;
+
+	// total nodes
+	private int totalNodes;
+
+	// server index
+	private int nodeInd;
+
+	// consensus module
+	private ConsensusModule consensusModule;
+
+
 
 	// A simple ping, simply returns True
 	public boolean ping() {
@@ -108,17 +130,54 @@ public class Server {
 
 		try {
 
-			System.out.println("Attempting to start XML-RPC Server...");
+			System.out.println("Attempting to start XML-RPC Server.Server...");
 
-			WebServer server = new WebServer(8080);
-			server.addHandler("surfstore", new Server());
-			server.start();
+			WebServer rpcserver = new WebServer(8080);
+			Server baseServer = new Server();
+			rpcserver.addHandler("surfstore", baseServer);
+			rpcserver.start();
 
 			System.out.println("Started successfully.");
+
+			new Thread(new ElectionModule(baseServer)).start();
+
+
 			System.out.println("Accepting requests. (Halt program to stop.)");
 
 		} catch (Exception exception){
-			System.err.println("Server: " + exception);
+			System.err.println("Server.Server: " + exception);
 		}
+	}
+
+	public ServerStatus getStatus() {
+		return status;
+	}
+
+	public void setStatus(ServerStatus status) {
+		this.status = status;
+	}
+
+	public int getTerm() {
+		return term;
+	}
+
+	public void increaseTerm() {
+		term++;
+	}
+
+	public int getTotalNodes() {
+		return totalNodes;
+	}
+
+	public int getNodeInd() {
+		return nodeInd;
+	}
+
+	public String[] getServerList() {
+		return serverList;
+	}
+
+	public ConsensusModule getConsensusModule() {
+		return consensusModule;
 	}
 }
