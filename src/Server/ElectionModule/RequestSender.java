@@ -1,50 +1,50 @@
-package Server;
+package Server.ElectionModule;
 
+import Server.Server;
+import Server.ServerStatus;
+import Server.utils.Utils;
 import org.apache.xmlrpc.XmlRpcClient;
 import org.apache.xmlrpc.XmlRpcException;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Vector;
 
-public class ElectionModule implements Runnable {
-
-    // Server
+class RequestSender {
     private Server server;
 
     // Timeout to trigger a new leader election
-    private Timer electionTimer;
-
-    // Timeout to resend RequestVoteRPC
-    private Timer requestVoteTimer;
+    private Timer electionTimer = null;
+    // Timeout to trigger a new RequestVoteRPC
+    private Timer[] requestVoteTimers = new Timer[server.getTotalNodes()];
 
     // VoteInfo
     private enum VoteInfo {VOTE_ME, VOTE_OTHERS}
     private VoteInfo[] voteInfos;
-    private int voteFor = -1;
-    private boolean voted = false;
 
-
-    // Timeout upper/lower bound
-    private int timeoutMIN = 200;
-    private int timeoutMAX = 300;
-
-    public ElectionModule(Server server) {
+    public RequestSender(Server server) {
         this.server = server;
     }
 
+    public void registerElection() {
+        // schedule a timer task
+        // execute election process when timeout
+        electionTimer = new Timer();
+        electionTimer.schedule(new StartElectionTask(), Utils.getRandomTimeoutVal());
+    }
+
     // Election Init Task
-    private class ElectionTask extends TimerTask {
+    class StartElectionTask extends TimerTask {
 
         @Override
         public void run() {
             System.out.println("Starting a new round of election at term" + server.getTerm() + 1);
             // register next round timer task
-            electionTimer = new Timer();
-            electionTimer.schedule(new ElectionTask(), getRandomTimeoutVal());
+            electionTimer= new Timer();
+            long timeout = Utils.getRandomTimeoutVal();
+            electionTimer.schedule(new StartElectionTask(), Utils.getRandomTimeoutVal());
 
             // start this round of election
             // 1. reset VoteInfo
@@ -55,33 +55,23 @@ public class ElectionModule implements Runnable {
             server.setStatus(ServerStatus.CANDIDATE);
             // 4. Vote itself
             voteInfos[server.getNodeInd()] = VoteInfo.VOTE_ME;
-            // 5. Execute RequestVoteRPC task
-            new Thread(new SendRequestVoteTask()).start();
-        }
-    }
-
-    // Send RequestVote Task
-    private class SendRequestVoteTask extends TimerTask {
-
-        @Override
-        public void run() {
+            // 5. Send RequestVoteRPC task
             System.out.println("Starting sending RequestVoteRPC...");
-            // setup timer
-            requestVoteTimer = new Timer();
-            requestVoteTimer.schedule(new SendRequestVoteTask(), (getRandomTimeoutVal() / 3));
             // send RequestVoteRPC in parallel
             for (int i = 0; i < server.getTotalNodes(); i++) {
                 if (voteInfos[i] == null) {
-                    new Thread(new SendVoteReq(i, server.getServerList()[i])).start();
+                    // periodically send request util receive response
+                    requestVoteTimers[i] = new Timer();
+                    requestVoteTimers[i].schedule(new SendRequestVoteTask(i, server.getServerList()[i]), 0, timeout / 3);
                 }
             }
         }
     }
 
-    private class SendVoteReq implements Runnable {
+    class SendRequestVoteTask extends TimerTask {
         private int targetNodeID;
         private String url;
-        public SendVoteReq(int targetNodeID, String url) {
+        public SendRequestVoteTask(int targetNodeID, String url) {
             this.targetNodeID = targetNodeID;
             this.url = url;
         }
@@ -106,24 +96,26 @@ public class ElectionModule implements Runnable {
             try {
                 response = (String) client.execute("surfstore.requestVote", params);
             } catch (XmlRpcException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
+                return;
             } catch (IOException e) {
-                e.printStackTrace();
+                System.out.println(e.getMessage());
+                return;
             }
 
             if (response.equals("YES")) {
                 System.out.println("Node " + targetNodeID + "Vote Me!");
                 voteInfos[targetNodeID] = VoteInfo.VOTE_ME;
+                requestVoteTimers[targetNodeID].cancel();
             } else if (response.equals("NO")) {
                 System.out.println("Node " + targetNodeID + "Vote Others.");
                 voteInfos[targetNodeID] = VoteInfo.VOTE_OTHERS;
+                requestVoteTimers[targetNodeID].cancel();
             }
 
             // if got majority votes
             if (countVotes(voteInfos) > server.getTotalNodes() / 2) {
                 System.out.println("Node " + server.getNodeInd() + " become a leader of term " + server.getTerm());
-                // cancel requestVoteTimer Task
-                requestVoteTimer.cancel();
                 // cancel electionTimer Task
                 electionTimer.cancel();
                 server.setStatus(ServerStatus.LEADER);
@@ -131,54 +123,6 @@ public class ElectionModule implements Runnable {
                 server.getConsensusModule().startLeadership();
             }
         }
-    }
-
-    public boolean handleVoteReq(int candidateTerm, int candidateNodeID, int lastLogIndex, int lastLogTerm) {
-        if (candidateTerm < server.getTerm()) {
-            return false;
-        }
-        if (candidateTerm == server.getTerm()) {
-            if (!voted || voteFor == candidateNodeID) {
-                if (candidateLogUpToDate(lastLogIndex, lastLogTerm)) {
-                    voted = true;
-                    voteFor = candidateNodeID;
-                    return true;
-                }
-                return false;
-            }
-            return false;
-        }
-        if (candidateTerm > server.getTerm()) {
-            server.updateTerm(candidateTerm);
-            voted = true;
-            voteFor = candidateNodeID;
-            return true;
-        }
-        return false;
-    }
-
-    // TODO: Implement
-    private boolean candidateLogUpToDate(int lastLogIndex, int lastLogTerm) {
-        return true;
-    }
-
-    @Override
-    public void run() {
-        System.out.println("Election Module Start Working");
-        startElectionModule();
-    }
-
-    private void startElectionModule() {
-        // schedule a timer task
-        // execute election process when timeout
-        electionTimer = new Timer();
-        electionTimer.schedule(new ElectionTask(), getRandomTimeoutVal());
-    }
-
-    private int getRandomTimeoutVal() {
-        Random timeoutVal = new Random();
-        int timeout = timeoutVal.nextInt(timeoutMAX) % (timeoutMAX - timeoutMIN + 1) + timeoutMIN;
-        return timeout;
     }
 
     private int countVotes(VoteInfo[] voteInfos) {
